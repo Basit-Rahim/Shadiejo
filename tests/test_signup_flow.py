@@ -8,7 +8,7 @@ import json
 
 def test_signup_flow():
     """Test the complete signup process"""
-    base_url = "http://localhost:8000"
+    base_url = "http://localhost:8080"
     
     print("🚀 Testing Signup Flow with Email Verification")
     print("=" * 50)
