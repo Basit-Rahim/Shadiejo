@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
+import os
 import time
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -18,17 +19,26 @@ from app.core.config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: wait for DB to be ready, then create tables
-    max_attempts = 30
+    max_attempts = int(os.environ.get("DB_BOOT_WAIT_ATTEMPTS", "30"))
+    sleep_seconds = float(os.environ.get("DB_BOOT_WAIT_SLEEP", "2"))
+    allow_start_without_db = os.environ.get("ALLOW_START_WITHOUT_DB", "false").lower() in {"1", "true", "yes"}
+
+    db_ready = False
     for attempt in range(1, max_attempts + 1):
         try:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
+            db_ready = True
             break
         except OperationalError:
             if attempt == max_attempts:
+                if allow_start_without_db:
+                    break
                 raise
-            time.sleep(2)
-    Base.metadata.create_all(bind=engine)
+            time.sleep(sleep_seconds)
+
+    if db_ready:
+        Base.metadata.create_all(bind=engine)
     yield
     # Shutdown
     pass
@@ -84,9 +94,10 @@ async def health_check():
     return {"status": "healthy", "message": "Shadiejo API is running"}
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "8080"))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True
     )
